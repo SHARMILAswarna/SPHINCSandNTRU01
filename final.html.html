@@ -1,0 +1,509 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum-Secure Blockchain Visualizer</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: #fff;
+            min-height: 100vh;
+        }
+        .step {
+            margin: 15px 0;
+            padding: 20px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(5px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease;
+        }
+        .step:hover {
+            transform: scale(1.02);
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            background: linear-gradient(45deg, #ff6f61, #ff9f43);
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s ease, transform 0.2s ease;
+        }
+        button:hover {
+            background: linear-gradient(45deg, #ff9f43, #ff6f61);
+            transform: translateY(-2px);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        #miningProgress {
+            width: 100%;
+            height: 30px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        #progressBar {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #81C784);
+            width: 0%;
+            border-radius: 15px;
+            transition: width 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        #blockDetails, #genesisDetails {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border-left: 4px solid #4CAF50;
+        }
+        #blockDetails p, #genesisDetails p {
+            margin: 5px 0;
+            color: #e0e0e0;
+        }
+        .transaction-table {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        #blockchainMetrics {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+        }
+        #blockchainMetrics p {
+            margin: 8px 0;
+            font-size: 1.1em;
+            color: #d1e8d4;
+        }
+        .transaction-inputs {
+            margin: 10px 0;
+        }
+        .transaction-inputs input {
+            padding: 8px;
+            margin: 5px 0;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            width: 30%;
+            margin-right: 10px;
+        }
+        .transaction-inputs input::placeholder {
+            color: #ccc;
+        }
+        h1 {
+            text-align: center;
+            color: #ff9f43;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            animation: fadeIn 1s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        #miningStatus {
+            color: #81C784;
+            font-weight: bold;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            50% { opacity: 0.5; }
+        }
+        #blockchainChain {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+        }
+        .block-rep {
+            display: inline-block;
+            background: rgba(76, 175, 80, 0.2);
+            padding: 10px;
+            border-radius: 5px;
+            margin: 5px;
+            border: 2px solid #4CAF50;
+            transition: transform 0.3s ease;
+        }
+        .block-rep:hover {
+            transform: scale(1.05);
+        }
+        .chain-link {
+            width: 20px;
+            height: 2px;
+            background: #4CAF50;
+            display: inline-block;
+            vertical-align: middle;
+            margin: 0 5px;
+        }
+        .transaction-columns {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+        .transaction-columns div {
+            width: 48%;
+            padding: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+        #keypairDetails {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+            border-left: 4px solid #ff9f43;
+        }
+        #keypairDetails p {
+            margin: 5px 0;
+            color: #d1e8d4;
+        }
+    </style>
+</head>
+<body>
+    <h1>Quantum-Secure Blockchain Visualizer</h1>
+
+    <div id="welcome" class="step">
+        <p>Welcome! Click to start creating your blockchain with a genesis block.</p>
+        <button onclick="startBlockchain()">Start</button>
+    </div>
+
+    <div id="createBlockchain" class="step" style="display: none;">
+        <p>A blockchain is a chain of blocks linked by cryptographic hashes. Each block contains transaction data, timestamp, and a hash linking it to the previous block. Blocks are digitally signed (here simulated with hybrid signature). The genesis block has been created.</p>
+        <div id="genesisDetails"></div>
+        <button onclick="generateKeypair()">Next</button>
+    </div>
+
+    <div id="generateKeypair" class="step" style="display: none;">
+        <p>Click Generate to simulate creating your hybrid SPHINCS+ + NTRU keypair (quantum-resistant algorithms).</p>
+        <button onclick="simulateKeypair()">Generate</button>
+        <button onclick="addBlockStep()" style="display: none;" id="continueBtn">Continue</button>
+        <div id="keypairDetails"></div>
+    </div>
+
+    <div id="addBlock" class="step" style="display: none;">
+        <p><span style="color: #ff9f43;">🔸 Transaction Data:</span></p>
+        <div class="transaction-inputs">
+            <input type="text" id="senderInput" placeholder="Sender">
+            <input type="text" id="receiverInput" placeholder="Receiver">
+            <input type="number" id="amountInput" placeholder="Amount" min="0">
+        </div>
+        <button onclick="mineAndAddBlock()">Add Block (Mine & Add)</button>
+        <button onclick="showMiningStatus()" style="display: none;" id="skipBtn">Skip to Mining Status</button>
+        <div id="miningProgress">
+            <div id="progressBar"></div>
+        </div>
+        <p id="miningStatus"></p>
+    </div>
+
+    <div id="miningCompleted" class="step" style="display: none;">
+        <p style="color: #81C784;">⛏️ Mining Completed</p>
+        <p>Block mined successfully!</p>
+        <button onclick="validateChain()">Validate Chain</button>
+        <button onclick="addBlockStep()">Add More Blocks</button>
+        <div id="blockDetails"></div>
+    </div>
+
+    <div id="chainValidation" class="step" style="display: none;">
+        <p style="color: #ff9f43;">🔍 Chain Validation</p>
+        <button onclick="validateBlockchain()">Validate Blockchain</button>
+        <p id="validationResult"></p>
+        <button onclick="finish()" style="display: none;" id="finishBtn">Finish</button>
+    </div>
+
+    <div id="finished" class="step" style="display: none;">
+        <p style="color: #4CAF50;">✅ Blockchain is Secured with Hybrid Digital Signature and Proof-of-Work Simulation</p>
+        <div id="blockchainMetrics">
+            <p>Total Blocks: <span id="totalBlocks">0</span></p>
+            <p>Blocks with Hybrid Signature: <span id="signedBlocks">0</span></p>
+            <p>Mining Success Rate: <span id="miningRate">0%</span></p>
+            <p>Block Timestamps Overview: <span id="timestamps"></span></p>
+        </div>
+        <div id="blockchainChain"></div>
+    </div>
+
+    <script>
+        let blockchain = [];
+        let balances = { "Alice": 100, "Bob": 50, "Charlie": 20 };
+        let hybridKeys = {};
+        let currentStep = 0;
+        let miningProgress = 0;
+        let totalMiningTime = 0;
+        let minedBlocks = 0;
+
+        function startBlockchain() {
+            const genesisBlock = {
+                index: 0,
+                previousHash: "0",
+                timestamp: Date.now(),
+                data: { raw: "Genesis Block", parsed: { sender: "System", receiver: "Network", amount: 0 } },
+                nonce: 0,
+                hash: "genesis_hash_" + Math.random().toString(36).substr(2, 9),
+                signature: { sphincs_sig: "gen_sim_" + Math.random().toString(36).substr(2, 5), ntru_cipher: "gen_enc_" + Math.random().toString(36).substr(2, 5) }
+            };
+            blockchain.push(genesisBlock);
+            minedBlocks++;
+            updateGenesisDetails();
+            updateMetrics();
+            document.getElementById('welcome').style.display = 'none';
+            document.getElementById('createBlockchain').style.display = 'block';
+        }
+
+        function updateGenesisDetails() {
+            const genesisBlock = blockchain[0];
+            document.getElementById('genesisDetails').innerHTML = `
+                <p>Genesis Block Details:</p>
+                <p>Index: ${genesisBlock.index}</p>
+                <p>Previous Hash: ${genesisBlock.previousHash}</p>
+                <p>Hash: ${genesisBlock.hash.substr(0, 8)}...</p>
+                <p>Data: ${genesisBlock.data.raw}</p>
+                <p>Timestamp: ${new Date(genesisBlock.timestamp).toLocaleString()}</p>
+                <p>Signature: ${JSON.stringify(genesisBlock.signature).substr(0, 20)}...</p>
+            `;
+        }
+
+        function generateKeypair() {
+            document.getElementById('createBlockchain').style.display = 'none';
+            document.getElementById('generateKeypair').style.display = 'block';
+        }
+
+        function simulateKeypair() {
+            const sphincsParams = {
+                type: "SPHINCS+",
+                securityLevel: "128-bit",
+                signatureLength: 7856,
+                publicKeyLength: 32,
+                privateKeyLength: 64
+            };
+            const ntruParams = {
+                type: "NTRU",
+                securityLevel: "256-bit",
+                keySize: 2048,
+                publicKeyLength: 699,
+                privateKeyLength: 699
+            };
+
+            hybridKeys = {
+                sphincs: {
+                    privateKey: `SPH_${Math.random().toString(36).substr(2, 16).padEnd(sphincsParams.privateKeyLength, '0')}`,
+                    publicKey: `SPK_${Math.random().toString(36).substr(2, 16).padEnd(sphincsParams.publicKeyLength, '0')}`,
+                    params: sphincsParams
+                },
+                ntru: {
+                    privateKey: `NTRU_SK_${Math.random().toString(36).substr(2, 16).padEnd(ntruParams.privateKeyLength, '0')}`,
+                    publicKey: `NTRU_PK_${Math.random().toString(36).substr(2, 16).padEnd(ntruParams.publicKeyLength, '0')}`,
+                    params: ntruParams
+                },
+                generationTime: `${(Math.random() * 2).toFixed(2)} seconds`
+            };
+
+            document.getElementById('keypairDetails').innerHTML = `
+                <p><strong>SPHINCS+ Keypair:</strong></p>
+                <p>Private Key: ${hybridKeys.sphincs.privateKey.substr(0, 8)}... (Length: ${sphincsParams.privateKeyLength} bytes)</p>
+                <p>Public Key: ${hybridKeys.sphincs.publicKey.substr(0, 8)}... (Length: ${sphincsParams.publicKeyLength} bytes)</p>
+                <p>Security: ${sphincsParams.securityLevel}, Signature Length: ${sphincsParams.signatureLength} bytes</p>
+                <p><strong>NTRU Keypair:</strong></p>
+                <p>Private Key: ${hybridKeys.ntru.privateKey.substr(0, 8)}... (Length: ${ntruParams.privateKeyLength} bytes)</p>
+                <p>Public Key: ${hybridKeys.ntru.publicKey.substr(0, 8)}... (Length: ${ntruParams.publicKeyLength} bytes)</p>
+                <p>Security: ${ntruParams.securityLevel}, Key Size: ${ntruParams.keySize} bits</p>
+                <p>Generation Time: ${hybridKeys.generationTime}</p>
+            `;
+            document.getElementById('continueBtn').style.display = 'inline';
+        }
+
+        function addBlockStep() {
+            document.getElementById('generateKeypair').style.display = 'none';
+            document.getElementById('addBlock').style.display = 'block';
+        }
+
+        function mineAndAddBlock() {
+            const sender = document.getElementById('senderInput').value.trim();
+            const receiver = document.getElementById('receiverInput').value.trim();
+            const amount = parseFloat(document.getElementById('amountInput').value);
+
+            if (!sender || !receiver || isNaN(amount) || amount <= 0) {
+                return alert('Please enter valid sender, receiver, and amount');
+            }
+            if (!balances[sender]) {
+                return alert('Sender does not exist or has no balance');
+            }
+            if (balances[sender] < amount) {
+                return alert('Insufficient balance for ' + sender);
+            }
+
+            balances[sender] -= amount;
+            balances[receiver] = (balances[receiver] || 0) + amount;
+            const transaction = { raw: `${sender} sends ${amount} to ${receiver}`, parsed: { sender, receiver, amount } };
+
+            document.getElementById('miningStatus').innerText = 'Mining started...';
+            document.getElementById('progressBar').style.width = '0%';
+            let progress = 0;
+
+            return new Promise((resolve) => {
+                const interval = setInterval(() => {
+                    progress += 5;
+                    document.getElementById('progressBar').style.width = progress + '%';
+                    if (progress >= 100) {
+                        clearInterval(interval);
+                        const previousBlock = blockchain[blockchain.length - 1];
+                        const block = {
+                            index: blockchain.length,
+                            previousHash: previousBlock.hash,
+                            timestamp: Date.now(),
+                            data: transaction,
+                            nonce: Math.floor(Math.random() * 1000),
+                            hash: 'simulated_hash_' + Math.random().toString(36).substr(2, 9),
+                            signature: { 
+                                sphincs_sig: 'sim_' + Math.random().toString(36).substr(2, 5), 
+                                ntru_cipher: 'enc_' + Math.random().toString(36).substr(2, 5),
+                                signedWith: hybridKeys
+                            }
+                        };
+                        blockchain.push(block);
+                        minedBlocks++;
+                        totalMiningTime += 2;
+                        document.getElementById('miningStatus').innerText = 'Mining completed!';
+                        document.getElementById('skipBtn').style.display = 'inline';
+                        resolve(block);
+                    }
+                }, 200);
+            }).then(() => {
+                showMiningStatus();
+            });
+        }
+
+        function showMiningStatus() {
+            document.getElementById('addBlock').style.display = 'none';
+            document.getElementById('miningCompleted').style.display = 'block';
+            updateBlockDetails();
+            updateBlockchainChain();
+        }
+
+        function updateBlockDetails() {
+            const latestBlock = blockchain[blockchain.length - 1];
+            document.getElementById('blockDetails').innerHTML = `
+                <p>Index: ${latestBlock.index}</p>
+                <p>Previous Hash: ${latestBlock.previousHash.substr(0, 8)}...</p>
+                <p>Hash: ${latestBlock.hash.substr(0, 8)}...</p>
+                <div class="transaction-table">
+                    <div><strong>Sender:</strong> ${latestBlock.data.parsed.sender}</div>
+                    <div><strong>Receiver:</strong> ${latestBlock.data.parsed.receiver}</div>
+                    <div><strong>Amount:</strong> ${latestBlock.data.parsed.amount}</div>
+                    <div></div>
+                </div>
+                <p>New Balances: ${JSON.stringify(balances)}</p>
+                <p>Timestamp: ${new Date(latestBlock.timestamp).toLocaleString()}</p>
+                <p>Nonce: ${latestBlock.nonce}</p>
+                <p>Signature: ${JSON.stringify(latestBlock.signature.sphincs_sig.substr(0, 20)) + '...'} (Signed with hybrid keys)</p>
+            `;
+        }
+
+        function validateChain() {
+            document.getElementById('miningCompleted').style.display = 'none';
+            document.getElementById('chainValidation').style.display = 'block';
+        }
+
+        function validateBlockchain() {
+            let isValid = true;
+            for (let i = 1; i < blockchain.length; i++) {
+                if (blockchain[i].previousHash !== blockchain[i - 1].hash) {
+                    isValid = false;
+                    break;
+                }
+            }
+            document.getElementById('validationResult').innerText = `Blockchain is ${isValid ? 'valid' : 'invalid'}`;
+            document.getElementById('finishBtn').style.display = 'inline';
+            updateMetrics();
+        }
+
+        function updateMetrics() {
+            document.getElementById('totalBlocks').innerText = blockchain.length;
+            document.getElementById('signedBlocks').innerText = minedBlocks;
+            document.getElementById('miningRate').innerText = (minedBlocks / blockchain.length * 100 || 0).toFixed(2) + '%';
+            document.getElementById('timestamps').innerText = blockchain.map(b => new Date(b.timestamp).toLocaleString()).join(', ');
+        }
+
+        function finish() {
+            document.getElementById('chainValidation').style.display = 'none';
+            document.getElementById('finished').style.display = 'block';
+            updateBlockchainChain();
+        }
+
+        function updateBlockchainChain() {
+            let chainHTML = '<h3>Blockchain Chain:</h3><div style="display: flex; flex-wrap: wrap; gap: 10px;">';
+            blockchain.forEach((block, index) => {
+                chainHTML += `<div class="block-rep">
+                    <div class="transaction-columns">
+                        <div><strong>Sender:</strong> ${block.data.parsed.sender}</div>
+                        <div><strong>Receiver:</strong> ${block.data.parsed.receiver}</div>
+                    </div>
+                    <p>Amount: ${block.data.parsed.amount}</p>
+                    <p>Block ${block.index}</p>
+                </div>`;
+                if (index < blockchain.length - 1) chainHTML += '<div class="chain-link"></div>';
+            });
+            chainHTML += '</div>';
+            document.getElementById('blockchainChain').innerHTML = chainHTML;
+        }
+
+        function addBlockStep() {
+            document.getElementById('miningCompleted').style.display = 'none';
+            document.getElementById('addBlock').style.display = 'block';
+            document.getElementById('senderInput').value = '';
+            document.getElementById('receiverInput').value = '';
+            document.getElementById('amountInput').value = '';
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('miningStatus').innerText = '';
+            document.getElementById('skipBtn').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
